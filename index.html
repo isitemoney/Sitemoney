@@ -3,51 +3,265 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة التحكم | Dashboard</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
-
-    <!-- واجهة تسجيل الدخول -->
-    <div id="login-container" class="container">
-        <div class="logo">🔐</div>
-        <h2>تسجيل الدخول</h2>
-        <p>الرجاء إدخال البيانات التي استلمتها من المدير</p>
-        <input type="text" id="username" placeholder="اسم المستخدم">
-        <input type="password" id="password" placeholder="كلمة المرور">
-        <button onclick="login()">دخول إلى الحساب</button>
-        <p id="error-msg" class="error">خطأ في اسم المستخدم أو كلمة المرور!</p>
-    </div>
-
-    <!-- واجهة الداشبورد -->
-    <div id="dashboard-container" class="container dashboard" style="display: none;">
-        <div class="header">
-            <h3>أهلاً بك، <span id="user-display"></span> ✨</h3>
-            <button class="logout-btn" onclick="logout()">خروج</button>
-        </div>
-        
-        <div class="stats-grid">
-            <div class="card">
-                <span class="icon">🖱️</span>
-                <h4>عدد الضغطات</h4>
-                <p id="clicks">0</p>
-            </div>
-            
-            <div class="card">
-                <span class="icon">💰</span>
-                <h4>الأرباح</h4>
-                <p id="earnings">$0.00</p>
-            </div>
-        </div>
-
-        <div class="user-info">
-            <p>حالة الحساب: <span style="color: #27ae60;">نشط</span></p>
-        </div>
-    </div>
-
-    <!-- مكتبات Firebase -->
+    <title>Promoter Dashboard Pro | نظام حماية النقرات</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-    <script src="script.js"></script>
+    <style> 
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap'); 
+        body { font-family: 'Tajawal', sans-serif; } 
+        .hidden { display: none; } 
+        .loader { border-top-color: #3b82f6; animation: spinner 1s linear infinite; }
+        @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen pb-10">
+
+    <!-- شاشة الفحص (تظهر للزوار فقط) -->
+    <div id="redirect-screen" class="hidden flex flex-col items-center justify-center min-h-screen p-6">
+        <div class="loader ease-linear rounded-full border-4 border-slate-800 h-16 w-16 mb-6"></div>
+        <h2 class="text-2xl font-bold text-blue-400">جاري فحص أمان الرابط...</h2>
+        <p class="text-slate-400 mt-2 text-center">يرجى الانتظار، يتم توجيهك الآن للوجهة المطلوبة</p>
+    </div>
+
+    <!-- نافبار اللوحة -->
+    <nav id="nav" class="hidden bg-slate-900 p-4 border-b border-slate-800 flex justify-between items-center px-6 sticky top-0 z-50">
+        <div class="flex flex-col">
+            <span class="text-xl font-bold text-blue-400">لوحة المروج</span>
+            <span id="user-welcome" class="text-[10px] text-slate-400 font-medium italic">جاري التحميل...</span>
+        </div>
+        <button onclick="logout()" class="bg-red-500/20 text-red-500 px-4 py-1 rounded-lg border border-red-500/50 text-sm">خروج</button>
+    </nav>
+
+    <!-- قسم تسجيل الدخول -->
+    <div id="auth-section" class="hidden flex items-center justify-center min-h-screen p-4">
+        <div class="bg-slate-900 p-8 rounded-3xl shadow-2xl w-full max-w-md border border-slate-800">
+            <h2 id="auth-title" class="text-2xl font-bold text-center mb-6 text-blue-400">تسجيل الدخول</h2>
+            <div class="space-y-4">
+                <input type="text" id="username" placeholder="اسمك الكامل" class="hidden w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none focus:border-blue-500 transition">
+                <input type="email" id="email" placeholder="البريد الإلكتروني" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none focus:border-blue-500 transition">
+                <input type="password" id="password" placeholder="كلمة المرور" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none focus:border-blue-500 transition">
+                <button onclick="handleAuth()" id="auth-btn" class="w-full bg-blue-600 hover:bg-blue-700 py-4 rounded-xl font-bold transition shadow-lg">دخول</button>
+                <button onclick="toggleAuthMode()" id="auth-switch" class="w-full text-slate-400 text-sm">ليس لديك حساب؟ سجل الآن</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- لوحة التحكم -->
+    <div id="dashboard-section" class="hidden p-4 max-w-6xl mx-auto space-y-6 mt-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800">
+                <p class="text-slate-400 text-xs">إجمالي الأرباح</p>
+                <h3 id="stat-total" class="text-2xl font-bold text-emerald-400">$0.00</h3>
+            </div>
+            <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800">
+                <p class="text-slate-400 text-xs">أرباح اليوم</p>
+                <h3 id="stat-today" class="text-2xl font-bold text-blue-400">$0.00</h3>
+            </div>
+            <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800">
+                <p class="text-slate-400 text-xs">النقرات الصحيحة</p>
+                <h3 id="stat-clicks" class="text-2xl font-bold text-purple-400">0</h3>
+            </div>
+            <div class="bg-slate-900 p-5 rounded-2xl border border-slate-800 text-center">
+                <p class="text-slate-400 text-xs">الستريك</p>
+                <h3 id="stat-streak" class="text-2xl font-bold text-orange-400">🔥 1</h3>
+            </div>
+        </div>
+
+        <div class="bg-blue-600/10 border border-blue-600/30 p-6 rounded-2xl shadow-inner">
+            <h4 class="font-bold mb-3 flex items-center gap-2 text-blue-400">🔗 رابط التسويق المحمي</h4>
+            <div class="flex bg-slate-950 rounded-xl overflow-hidden border border-slate-700 p-1">
+                <input type="text" id="ref-link" readonly class="bg-transparent p-3 flex-1 text-sm outline-none text-blue-300 font-mono">
+                <button onclick="copyRef()" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-lg text-sm font-bold transition">نسخ</button>
+            </div>
+            <p class="text-[11px] text-blue-400/80 mt-3">* يتم احتساب الربح للنقرات الفريدة فقط (مرة واحدة لكل مستخدم يومياً).</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <button onclick="openWithdraw()" class="bg-emerald-600 hover:bg-emerald-500 p-4 rounded-xl font-bold flex transition shadow-lg items-center justify-center">💰 طلب سحب</button>
+            <a href="https://t.me/eruuiyl" target="_blank" class="bg-slate-800 hover:bg-slate-700 p-4 rounded-xl font-bold border border-slate-700 flex items-center justify-center">💬 الدعم</a>
+        </div>
+
+        <div id="withdraw-modal" class="hidden bg-slate-900 p-6 rounded-2xl border-2 border-emerald-500/30 space-y-4">
+            <h3 class="text-xl font-bold text-emerald-400 text-center">سحب الأرباح</h3>
+            <input type="number" id="w-amount" placeholder="المبلغ (الحد الأدنى $20)" class="w-full p-4 rounded-xl bg-slate-800 border border-slate-700 outline-none">
+            <button onclick="confirmWithdraw()" class="w-full bg-emerald-600 py-4 rounded-xl font-bold transition hover:bg-emerald-700">تأكيد السحب</button>
+            <button onclick="openWithdraw()" class="w-full text-slate-500 text-sm">إلغاء</button>
+        </div>
+
+        <div id="admin-area" class="hidden bg-slate-900 p-6 rounded-2xl border border-red-500/20 mt-10">
+            <h2 class="text-red-400 font-bold mb-4 italic">⚙️ لوحة الإدارة</h2>
+            <div id="admin-list" class="space-y-4"></div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCnkJf-6sAeRJpm34yXLmklLwSxM-GJvUc",
+            authDomain: "my-dash-c78e3.firebaseapp.com",
+            projectId: "my-dash-c78e3",
+            databaseURL: "https://my-dash-c78e3-default-rtdb.firebaseio.com",
+            storageBucket: "my-dash-c78e3.firebasestorage.app",
+            messagingSenderId: "137154835768",
+            appId: "1:137154835768:web:7f396782de1300f9bdfdcd"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+        
+        const ADMIN_EMAILS = ["xxetali46@gmail.com", "xxetali550@gmail.com"]; 
+        const DEFAULT_MARKETING_LINK = "https://hp.funroom.store/a/8nw6emt2";
+
+        // --- نظام كشف الغش والتحويل ---
+        async function checkRoute() {
+            const params = new URLSearchParams(window.location.search);
+            const promoterId = params.get('id');
+
+            if (promoterId) {
+                document.getElementById('redirect-screen').classList.remove('hidden');
+                handleVisitorAntiCheat(promoterId);
+            } else {
+                initDashboard();
+            }
+        }
+
+        async function handleVisitorAntiCheat(id) {
+            try {
+                // 1. جلب IP الزائر
+                const ipRes = await fetch('https://api.ipify.org?format=json');
+                const ipData = await ipRes.json();
+                const visitorIp = ipData.ip.replace(/\./g, '_'); 
+
+                const ipCheckRef = db.ref('ip_logs/' + id + '/' + visitorIp);
+                const userRef = db.ref('users/' + id);
+
+                // 2. التحقق من الوقت (24 ساعة)
+                const ipSnap = await ipCheckRef.get();
+                const lastClick = ipSnap.val();
+                const now = Date.now();
+
+                if (lastClick && (now - lastClick < 24 * 60 * 60 * 1000)) {
+                    // نقرة مكررة - تحويل فقط
+                    finalizeRedirect(userRef);
+                } else {
+                    // نقرة جديدة - احتساب ربح
+                    await ipCheckRef.set(now);
+                    await userRef.transaction((data) => {
+                        if (data) {
+                            data.clicks = (data.clicks || 0) + 1;
+                            data.balance = Number(((data.balance || 0) + 0.02).toFixed(2));
+                            data.todayBalance = Number(((data.todayBalance || 0) + 0.02).toFixed(2));
+                        }
+                        return data;
+                    });
+                    finalizeRedirect(userRef);
+                }
+            } catch (e) {
+                window.location.href = DEFAULT_MARKETING_LINK;
+            }
+        }
+
+        async function finalizeRedirect(ref) {
+            const snap = await ref.get();
+            const data = snap.val();
+            const link = (data && data.marketingLink) ? data.marketingLink : DEFAULT_MARKETING_LINK;
+            setTimeout(() => { window.location.href = link; }, 1000);
+        }
+
+        // --- إدارة اللوحة ---
+        function initDashboard() {
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    showUI('dashboard-section');
+                    loadUserData(user);
+                    if (ADMIN_EMAILS.includes(user.email)) loadAdminPanel();
+                } else {
+                    showUI('auth-section');
+                }
+            });
+        }
+
+        function loadUserData(user) {
+            db.ref('users/' + user.uid).on('value', snap => {
+                const d = snap.val();
+                if(!d) return;
+                document.getElementById('stat-total').innerText = `$${(d.balance || 0).toFixed(2)}`;
+                document.getElementById('stat-today').innerText = `$${(d.todayBalance || 0).toFixed(2)}`;
+                document.getElementById('stat-clicks').innerText = d.clicks || 0;
+                document.getElementById('user-welcome').innerText = `أهلاً بك، ${d.username}`;
+                const path = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                document.getElementById('ref-link').value = path + "?id=" + user.uid;
+                currentBalance = d.balance || 0;
+            });
+        }
+
+        function showUI(id) {
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('dashboard-section').classList.add('hidden');
+            document.getElementById('nav').classList.add('hidden');
+            document.getElementById(id).classList.remove('hidden');
+            if (id === 'dashboard-section') document.getElementById('nav').classList.remove('hidden');
+        }
+
+        let isLoginMode = true;
+        function toggleAuthMode() {
+            isLoginMode = !isLoginMode;
+            document.getElementById('username').classList.toggle('hidden', isLoginMode);
+            document.getElementById('auth-title').innerText = isLoginMode ? "تسجيل الدخول" : "إنشاء حساب";
+        }
+
+        async function handleAuth() {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            try {
+                if (isLoginMode) { await auth.signInWithEmailAndPassword(email, pass); } 
+                else {
+                    const name = document.getElementById('username').value;
+                    const res = await auth.createUserWithEmailAndPassword(email, pass);
+                    await db.ref('users/' + res.user.uid).set({
+                        username: name, email, balance: 0, todayBalance: 0, clicks: 0, streak: 1, marketingLink: DEFAULT_MARKETING_LINK
+                    });
+                }
+            } catch (e) { alert(e.message); }
+        }
+
+        function openWithdraw() { document.getElementById('withdraw-modal').classList.toggle('hidden'); }
+
+        function confirmWithdraw() {
+            const amount = parseFloat(document.getElementById('w-amount').value);
+            if (amount < 20 || amount > currentBalance) return alert("خطأ في المبلغ");
+            db.ref('withdrawals').push({ uid: auth.currentUser.uid, amount, status: 'pending', timestamp: Date.now() })
+            .then(() => { alert("✅ طلبك قيد المعالجة (24-72 ساعة)."); openWithdraw(); });
+        }
+
+        function loadAdminPanel() {
+            document.getElementById('admin-area').classList.remove('hidden');
+            db.ref('users').on('value', snap => {
+                const users = snap.val();
+                const list = document.getElementById('admin-list');
+                list.innerHTML = "";
+                for (let id in users) {
+                    if (ADMIN_EMAILS.includes(users[id].email)) continue;
+                    list.innerHTML += `
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 flex flex-col md:flex-row justify-between gap-4 mb-2">
+                            <div><p class="text-blue-400 font-bold">${users[id].username}</p><p class="text-xs text-slate-500">$${users[id].balance}</p></div>
+                            <input id="l-${id}" type="text" placeholder="رابط مخصص" class="bg-slate-800 p-2 rounded text-xs border border-slate-700">
+                            <button onclick="db.ref('users/${id}').update({marketingLink: document.getElementById('l-${id}').value})" class="bg-purple-600 px-4 py-1 rounded text-xs">تحديث</button>
+                        </div>`;
+                }
+            });
+        }
+
+        function copyRef() {
+            const el = document.getElementById('ref-link');
+            el.select(); document.execCommand('copy');
+            alert("✅ تم نسخ الرابط!");
+        }
+
+        function logout() { auth.signOut(); }
+
+        checkRoute();
+    </script>
 </body>
 </html>
